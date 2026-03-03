@@ -2,37 +2,36 @@
 
 import type { FdcFoodDetails, NutrientsMap } from "../types";
 
-const NAME_TO_KEY: Array<{ match: RegExp; key: string }> = [
-  { match: /energy/i, key: "calories" },
-  { match: /protein/i, key: "protein" },
-  { match: /(carbohydrate|carb)/i, key: "carbs" },
-  { match: /(total lipid|total fat)/i, key: "fat" },
-  { match: /fiber/i, key: "fiber" },
-  { match: /(sugars|total sugar)/i, key: "sugars" },
-  { match: /sodium/i, key: "sodium" },
-  { match: /cholesterol/i, key: "cholesterol" },
-  { match: /fatty acids, total saturated/i, key: "satFat" },
-  { match: /fatty acids, total trans/i, key: "transFat" },
-  { match: /calcium/i, key: "calcium" },
-  { match: /^iron/i, key: "iron" },
-  { match: /potassium/i, key: "potassium" },
-  { match: /vitamin c/i, key: "vitaminC" },
-];
-
 export function extractNutrientsPer100g(food: FdcFoodDetails): NutrientsMap {
-  const nutrients: NutrientsMap = {};
-  const list = food.foodNutrients ?? [];
+  const out: NutrientsMap = {};
 
-  for (const n of list) {
-    const name = n?.nutrient?.name || n?.nutrientName || "";
-    const amount = typeof n?.amount === "number" ? n.amount : null;
+  const nutrients = food.foodNutrients ?? [];
+
+  const servingSize = Number((food as any).servingSize ?? NaN);
+  const servingUnit = String((food as any).servingSizeUnit ?? "").toLowerCase();
+
+  // If we can normalize using grams, do so.
+  const canNormalize =
+    Number.isFinite(servingSize) && servingSize > 0 && servingUnit === "g";
+
+  for (const n of nutrients) {
+    const amount = typeof n.amount === "number" ? n.amount : null;
+    const nutrient = (n as any).nutrient;
+    const name: string = nutrient?.name ?? n.nutrientName ?? "";
+    const unit: string = nutrient?.unitName ?? "";
+
     if (!name || amount == null) continue;
 
-    const map = NAME_TO_KEY.find((m) => m.match.test(name));
-    if (!map) continue;
+    // Normalize (serving -> 100g) when possible
+    const per100 = canNormalize ? (amount / servingSize) * 100 : amount;
 
-    nutrients[map.key] = amount;
+    // Store everything by a stable key:
+    // Prefer nutrient "number" if available, else fallback to name.
+    const nutrientNumber: string | undefined = nutrient?.number;
+    const key = nutrientNumber ? `n_${nutrientNumber}` : `name_${name}`;
+
+    out[key] = per100;
   }
 
-  return nutrients;
+  return out;
 }
