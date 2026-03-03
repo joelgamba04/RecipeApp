@@ -50,7 +50,17 @@ export async function initDb(): Promise<void> {
       FOREIGN KEY (recipe_ingredient_id) REFERENCES recipe_ingredients(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS nutrient_catalog (
+      nutrient_key TEXT PRIMARY KEY NOT NULL,  -- e.g. "n_208"
+      nutrient_number TEXT,                    -- e.g. "208"
+      name TEXT NOT NULL,                      -- e.g. "Energy"
+      unit TEXT NOT NULL,                      -- e.g. "kcal"
+      rank INTEGER,                            -- FDC rank if present
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title);
     CREATE INDEX IF NOT EXISTS idx_ingredients_recipe ON recipe_ingredients(recipe_id);
+    CREATE INDEX IF NOT EXISTS idx_nutrient_catalog_name ON nutrient_catalog(name);
   `);
 }

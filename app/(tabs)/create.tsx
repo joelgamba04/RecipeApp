@@ -10,7 +10,7 @@ import {
   upsertRecipe,
 } from "../../src/db/recipesRepo";
 import { getFoodDetailsCached, searchFoods } from "../../src/fdc/fdcClient";
-import { extractNutrientsPer100g } from "../../src/fdc/fdcMapper";
+import { extractNutrientsPer100gAndCatalog } from "../../src/fdc/fdcMapper";
 import type { FdcSearchFood } from "../../src/types";
 
 export default function CreateRecipe() {
@@ -58,7 +58,7 @@ export default function CreateRecipe() {
     });
 
     const details = await getFoodDetailsCached(picked.fdcId);
-    const nutrientsPer100g = extractNutrientsPer100g(details);
+    const nutrientsPer100g = await extractNutrientsPer100gAndCatalog(details);
     await upsertIngredientSnapshot(ingredientId, nutrientsPer100g);
 
     setPicked(null);

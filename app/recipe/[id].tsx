@@ -3,11 +3,14 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { FlatList, Text, View } from "react-native";
+import {
+  listNutrientCatalog,
+  NutrientCatalogRow,
+} from "../../src/db/nutrientsRepo";
 import { getRecipeById } from "../../src/db/recipesRepo";
 import { computeRecipeTotals } from "../../src/nutrition/computeTotals";
-import { NUTRIENTS } from "../../src/nutrition/nutrientCatalog";
 import type { NutrientVisibilityMap } from "../../src/prefs/nutrientPrefs";
-import { loadVisibility } from "../../src/prefs/nutrientPrefs";
+import { isVisible, loadVisibility } from "../../src/prefs/nutrientPrefs";
 import type { HydratedRecipe } from "../../src/types";
 
 export default function RecipeDetail() {
@@ -16,12 +19,14 @@ export default function RecipeDetail() {
   const [visibility, setVisibility] = useState<NutrientVisibilityMap | null>(
     null,
   );
+  const [catalog, setCatalog] = useState<NutrientCatalogRow[]>([]);
 
   useEffect(() => {
     (async () => {
       const r = await getRecipeById(String(id));
       setRecipe(r);
       setVisibility(await loadVisibility());
+      setCatalog(await listNutrientCatalog(""));
     })();
   }, [id]);
 
@@ -34,6 +39,11 @@ export default function RecipeDetail() {
   }
 
   const { totals, perServing } = computeRecipeTotals(recipe);
+  const visibleCatalog = catalog.filter(
+    (n) =>
+      isVisible(visibility, n.nutrient_key) &&
+      (totals[n.nutrient_key] != null || perServing[n.nutrient_key] != null),
+  );
 
   return (
     <View style={{ padding: 12, gap: 10 }}>
@@ -41,18 +51,19 @@ export default function RecipeDetail() {
       <Text style={{ opacity: 0.7 }}>Servings: {recipe.servings}</Text>
 
       <Text style={{ marginTop: 10, fontWeight: "800" }}>Per serving</Text>
-      {NUTRIENTS.filter((n) => visibility[n.key]).map((n) => (
-        <Text key={n.key}>
-          {n.label}: {Number(perServing[n.key] ?? 0).toFixed(2)} {n.unit}
+      {visibleCatalog.map((n) => (
+        <Text key={n.nutrient_key}>
+          {n.name}: {Number(perServing[n.nutrient_key] ?? 0).toFixed(2)}{" "}
+          {n.unit}
         </Text>
       ))}
 
       <Text style={{ marginTop: 10, fontWeight: "800" }}>
         Total (whole recipe)
       </Text>
-      {NUTRIENTS.filter((n) => visibility[n.key]).map((n) => (
-        <Text key={n.key}>
-          {n.label}: {Number(totals[n.key] ?? 0).toFixed(2)} {n.unit}
+      {visibleCatalog.map((n) => (
+        <Text key={n.nutrient_key}>
+          {n.name}: {Number(totals[n.nutrient_key] ?? 0).toFixed(2)} {n.unit}
         </Text>
       ))}
 
