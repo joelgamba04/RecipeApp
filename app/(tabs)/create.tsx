@@ -1,8 +1,8 @@
 // app/(tabs)/create.tsx
 
+import * as Crypto from "expo-crypto";
 import { useEffect, useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
-import { v4 as uuidv4 } from "uuid";
 import { initDb } from "../../src/db/db";
 import {
   addIngredient,
@@ -14,7 +14,7 @@ import { extractNutrientsPer100g } from "../../src/fdc/fdcMapper";
 import type { FdcSearchFood } from "../../src/types";
 
 export default function CreateRecipe() {
-  const [recipeId] = useState<string>(() => uuidv4());
+  const [recipeId] = useState(() => Crypto.randomUUID());
   const [title, setTitle] = useState<string>("");
   const [servings, setServings] = useState<string>("1");
 
@@ -48,7 +48,7 @@ export default function CreateRecipe() {
     if (!picked) return;
     await saveRecipe();
 
-    const ingredientId = uuidv4();
+    const ingredientId = Crypto.randomUUID();
     await addIngredient({
       id: ingredientId,
       recipe_id: recipeId,

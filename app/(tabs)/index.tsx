@@ -37,7 +37,10 @@ export default function RecipesList() {
         data={items}
         keyExtractor={(i) => i.id}
         renderItem={({ item }) => (
-          <Link href={`/recipe/${item.id}`} asChild>
+          <Link
+            href={{ pathname: "/recipe/[id]", params: { id: item.id } }}
+            asChild
+          >
             <Pressable
               style={{
                 padding: 12,
