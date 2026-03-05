@@ -8,7 +8,7 @@ import type {
 } from "../types";
 import { getDb } from "./db";
 
-export async function listRecipes(search = ""): Promise<RecipeRow[]> {
+export const listRecipes = async (search = ""): Promise<RecipeRow[]> => {
   const db = await getDb();
   const q = search.trim();
 
@@ -22,11 +22,11 @@ export async function listRecipes(search = ""): Promise<RecipeRow[]> {
     `SELECT * FROM recipes WHERE title LIKE ? ORDER BY updated_at DESC`,
     [`%${q}%`],
   );
-}
+};
 
-export async function getRecipeById(
+export const getRecipeById = async (
   recipeId: string,
-): Promise<HydratedRecipe | null> {
+): Promise<HydratedRecipe | null> => {
   const db = await getDb();
 
   const recipe = await db.getFirstAsync<RecipeRow>(
@@ -49,19 +49,19 @@ export async function getRecipeById(
     steps: safeJsonParse<string[]>(recipe.steps_json, []),
     ingredients: hydrated,
   };
-}
+};
 
-function safeJsonParse<T>(raw: string, fallback: T): T {
+export const safeJsonParse = <T>(raw: string, fallback: T): T => {
   try {
     return JSON.parse(raw) as T;
   } catch {
     return fallback;
   }
-}
+};
 
-async function hydrateIngredientSnapshots(
+const hydrateIngredientSnapshots = async (
   ingredients: RecipeIngredientRow[],
-): Promise<Array<RecipeIngredientRow & { nutrientsPer100g: NutrientsMap }>> {
+): Promise<Array<RecipeIngredientRow & { nutrientsPer100g: NutrientsMap }>> => {
   const db = await getDb();
   const placeholders = ingredients.map(() => "?").join(",");
   const ids = ingredients.map((i) => i.id);
@@ -87,15 +87,15 @@ async function hydrateIngredientSnapshots(
       {},
     ),
   }));
-}
+};
 
-export async function upsertRecipe(input: {
+export const upsertRecipe = async (input: {
   id: string;
   title: string;
   servings: number;
   steps: string[];
   photo_uri?: string | null;
-}): Promise<void> {
+}): Promise<void> => {
   const db = await getDb();
   const now = Date.now();
 
@@ -120,15 +120,15 @@ export async function upsertRecipe(input: {
       now,
     ],
   );
-}
+};
 
-export async function addIngredient(input: {
+export const addIngredient = async (input: {
   id: string;
   recipe_id: string;
   fdc_id: number;
   description: string;
   grams: number;
-}): Promise<void> {
+}): Promise<void> => {
   const db = await getDb();
   const now = Date.now();
 
@@ -147,12 +147,12 @@ export async function addIngredient(input: {
       now,
     ],
   );
-}
+};
 
-export async function upsertIngredientSnapshot(
+export const upsertIngredientSnapshot = async (
   recipeIngredientId: string,
   nutrientsPer100g: NutrientsMap,
-): Promise<void> {
+): Promise<void> => {
   const db = await getDb();
   await db.runAsync(
     `
@@ -163,4 +163,30 @@ export async function upsertIngredientSnapshot(
     `,
     [recipeIngredientId, JSON.stringify(nutrientsPer100g ?? {})],
   );
-}
+};
+
+export const listIngredientsForRecipe = async (recipeId: string) => {
+  const db = await getDb();
+  return db.getAllAsync<RecipeIngredientRow>(
+    `SELECT * FROM recipe_ingredients WHERE recipe_id = ? ORDER BY created_at ASC`,
+    [recipeId],
+  );
+};
+
+export const updateIngredientGrams = async (
+  ingredientId: string,
+  grams: number,
+) => {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE recipe_ingredients SET grams = ?, updated_at = ? WHERE id = ?`,
+    [grams, Date.now(), ingredientId],
+  );
+};
+
+export const deleteIngredient = async (ingredientId: string) => {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM recipe_ingredients WHERE id = ?`, [
+    ingredientId,
+  ]);
+};

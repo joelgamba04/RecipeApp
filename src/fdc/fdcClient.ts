@@ -4,33 +4,42 @@ import { getDb } from "../db/db";
 import type { FdcFoodDetails, FdcSearchResponse } from "../types";
 
 const BASE = "https://api.nal.usda.gov/fdc/v1";
-const API_KEY = process.env.EXPO_PUBLIC_FDC_API_KEY;
 
-const assertKey = () => {
+const getApiKey = () => {
+  const API_KEY = process.env.EXPO_PUBLIC_FDC_API_KEY;
   if (!API_KEY) throw new Error("Missing EXPO_PUBLIC_FDC_API_KEY");
+  return API_KEY;
 };
 
-export async function searchFoods(query: string): Promise<FdcSearchResponse> {
-  assertKey();
+export const searchFoods = async (
+  query: string,
+): Promise<FdcSearchResponse> => {
+  const api_key = getApiKey();
+  console.log(`searchFoods: "${query}"...`);
 
-  const res = await fetch(`${BASE}/foods/search?api_key=${API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query,
-      pageSize: 15,
-      pageNumber: 1,
-    }),
-  });
+  try {
+    const res = await fetch(`${BASE}/foods/search?api_key=${api_key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query,
+        pageSize: 15,
+        pageNumber: 1,
+      }),
+    });
 
-  if (!res.ok) throw new Error(`FDC search failed: ${res.status}`);
-  return (await res.json()) as FdcSearchResponse;
-}
+    if (!res.ok) throw new Error(`FDC search failed: ${res.status}`);
+    return (await res.json()) as FdcSearchResponse;
+  } catch (error) {
+    console.error("Error searching foods:", error);
+    throw error;
+  }
+};
 
-export async function getFoodDetailsCached(
+export const getFoodDetailsCached = async (
   fdcId: number,
-): Promise<FdcFoodDetails> {
-  assertKey();
+): Promise<FdcFoodDetails> => {
+  const api_key = getApiKey();
   const db = await getDb();
 
   const cached = await db.getFirstAsync<{ json: string }>(
@@ -40,7 +49,7 @@ export async function getFoodDetailsCached(
 
   if (cached?.json) return JSON.parse(cached.json) as FdcFoodDetails;
 
-  const res = await fetch(`${BASE}/food/${fdcId}?api_key=${API_KEY}`);
+  const res = await fetch(`${BASE}/food/${fdcId}?api_key=${api_key}`);
   if (!res.ok) throw new Error(`FDC details failed: ${res.status}`);
 
   const json = (await res.json()) as FdcFoodDetails;
@@ -63,4 +72,4 @@ export async function getFoodDetailsCached(
   );
 
   return json;
-}
+};
