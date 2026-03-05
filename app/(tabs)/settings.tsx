@@ -13,14 +13,14 @@ import {
   saveVisibility,
 } from "../../src/prefs/nutrientPrefs";
 
-export default function NutrientSettings() {
+const NutrientSettings = () => {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<NutrientCatalogRow[]>([]);
   const [vis, setVis] = useState<NutrientVisibilityMap>({});
 
-  async function refresh(search = "") {
+  const refresh = async (search = "") => {
     setRows(await listNutrientCatalog(search));
-  }
+  };
 
   useEffect(() => {
     (async () => {
@@ -36,14 +36,14 @@ export default function NutrientSettings() {
     return () => clearTimeout(t);
   }, [q]);
 
-  async function toggle(key: string, value: boolean) {
+  const toggle = async (key: string, value: boolean) => {
     const next = { ...vis, [key]: value };
     setVis(next);
     await saveVisibility(next);
-  }
+  };
 
   return (
-    <View style={{ padding: 12, gap: 10 }}>
+    <View style={{ flex: 1, padding: 12, gap: 10 }}>
       <Text style={{ fontSize: 18, fontWeight: "900" }}>
         Show / Hide Nutrients
       </Text>
@@ -66,7 +66,6 @@ export default function NutrientSettings() {
               alignItems: "center",
               paddingVertical: 10,
               borderBottomWidth: 0.5,
-              opacity: 0.98,
             }}
           >
             <View style={{ flex: 1, paddingRight: 12 }}>
@@ -77,11 +76,12 @@ export default function NutrientSettings() {
             </View>
             <Switch
               value={isVisible(vis, item.nutrient_key)}
-              onValueChange={(v) => void toggle(item.nutrient_key, v)}
+              onValueChange={(v) => toggle(item.nutrient_key, v)}
             />
           </View>
         )}
       />
     </View>
   );
-}
+};
+export default NutrientSettings;
