@@ -1,41 +1,43 @@
-import { Link } from "expo-router";
-import { useEffect, useState } from "react";
-import { FlatList, Pressable, Text, TextInput, View } from "react-native";
-import { initDb } from "../../src/db/db";
+import { Link, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { FlatList, Pressable, Text, TextInput } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { listRecipes } from "../../src/db/recipesRepo";
 import type { RecipeRow } from "../../src/types";
 
-export default function RecipesList() {
+const RecipesList = () => {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<RecipeRow[]>([]);
 
-  async function refresh(search = "") {
-    await initDb();
-    setItems(await listRecipes(search));
-  }
-
-  useEffect(() => {
-    void refresh("");
-  }, []);
-  useEffect(() => {
-    const t = setTimeout(() => {
-      void refresh(q);
-    }, 250);
-    return () => clearTimeout(t);
+  const refresh = useCallback(async () => {
+    const data = await listRecipes(q);
+    setItems(data);
   }, [q]);
 
+  // Refresh the list whenever the screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
+
   return (
-    <View style={{ padding: 12, gap: 10 }}>
+    <SafeAreaView style={{ flex: 1, padding: 12 }} edges={["bottom"]}>
       <TextInput
         value={q}
         onChangeText={setQ}
         placeholder="Search recipes…"
-        style={{ borderWidth: 1, borderRadius: 10, padding: 10 }}
+        style={{
+          borderWidth: 1,
+          borderRadius: 10,
+          padding: 10,
+          marginBottom: 12,
+        }}
       />
 
       <FlatList
         data={items}
-        keyExtractor={(i) => i.id}
+        keyExtractor={(r) => r.id}
         renderItem={({ item }) => (
           <Link
             href={{ pathname: "/recipe/[id]", params: { id: item.id } }}
@@ -57,6 +59,8 @@ export default function RecipesList() {
           </Link>
         )}
       />
-    </View>
+    </SafeAreaView>
   );
-}
+};;
+
+export default RecipesList;
