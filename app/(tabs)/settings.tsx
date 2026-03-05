@@ -69,9 +69,8 @@ const NutrientSettings = () => {
             }}
           >
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontWeight: "700" }}>{item.name}</Text>
-              <Text style={{ opacity: 0.6 }}>
-                {item.nutrient_key} • {item.unit}
+              <Text style={{ fontWeight: "700" }}>
+                {item.name}• {item.unit}
               </Text>
             </View>
             <Switch
