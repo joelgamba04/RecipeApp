@@ -35,6 +35,9 @@ export type FdcSearchFood = {
   fdcId: number;
   description: string;
   dataType?: string;
+  brandName?: string;
+  ingridients?: string;
+  foodCategory?: string;
 };
 
 export type FdcSearchResponse = {

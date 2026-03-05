@@ -1,11 +1,12 @@
 import {
-    FlatList,
-    Modal,
-    Pressable,
-    Text,
-    TextInput,
-    View,
+  FlatList,
+  Modal,
+  Pressable,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { FdcSearchFood } from "../types";
 
 type Props = {
@@ -18,7 +19,7 @@ type Props = {
   onClose: () => void;
 };
 
-export default function IngredientSearchModal({
+const IngredientSearchModal = ({
   visible,
   results,
   search,
@@ -26,12 +27,12 @@ export default function IngredientSearchModal({
   onSearch,
   onSelect,
   onClose,
-}: Props) {
+}: Props) => {
   if (!visible) return null;
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, padding: 16, gap: 10 }}>
+      <SafeAreaView style={{ flex: 1, padding: 16, gap: 10 }}>
         <Text style={{ fontSize: 18, fontWeight: "800" }}>Add Ingredient</Text>
 
         <View style={{ flexDirection: "row", gap: 8 }}>
@@ -63,7 +64,15 @@ export default function IngredientSearchModal({
               }}
             >
               <Text style={{ fontWeight: "700" }}>{item.description}</Text>
-              <Text style={{ opacity: 0.7 }}>{item.dataType ?? ""}</Text>
+              {item.brandName && (
+                <Text style={{ opacity: 0.7 }}>{item.brandName ?? ""}</Text>
+              )}
+              {item.ingridients && (
+                <Text style={{ opacity: 0.7 }}>{item.ingridients ?? ""}</Text>
+              )}
+              {item.foodCategory && (
+                <Text style={{ opacity: 0.7 }}>{item.foodCategory ?? ""}</Text>
+              )}
             </Pressable>
           )}
         />
@@ -74,7 +83,9 @@ export default function IngredientSearchModal({
         >
           <Text style={{ textAlign: "center" }}>Close</Text>
         </Pressable>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
-}
+};
+
+export default IngredientSearchModal;
