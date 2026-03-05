@@ -184,8 +184,11 @@ const CreateRecipe = () => {
   const ingredientCount = recipe?.ingredients?.length ?? 0;
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: 12, gap: 16 }}>
+    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+      <ScrollView
+        contentContainerStyle={{ padding: 12, paddingTop: 8, gap: 16 }}
+        contentInsetAdjustmentBehavior="automatic"
+      >
         {/* ---------- Header / Recipe info ---------- */}
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 20, fontWeight: "800" }}>Create Recipe</Text>
