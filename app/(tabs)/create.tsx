@@ -1,14 +1,9 @@
 // app/(tabs)/create.tsx
 import * as Crypto from "expo-crypto";
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  FlatList,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import {
   addIngredient,
   deleteIngredient,
@@ -24,18 +19,23 @@ import { extractNutrientsPer100gAndCatalog } from "../../src/fdc/fdcMapper";
 import { computeRecipeTotals } from "../../src/nutrition/computeTotals";
 import { TOP_NUTRIENT_KEYS } from "../../src/nutrition/topNutrients";
 
-import { SafeAreaView } from "react-native-safe-area-context";
 import {
   listNutrientCatalog,
-  NutrientCatalogRow,
+  type NutrientCatalogRow,
 } from "../../src/db/nutrientsRepo";
 import {
-  isVisible,
   loadVisibility,
-  NutrientVisibilityMap,
+  type NutrientVisibilityMap,
 } from "../../src/prefs/nutrientPrefs";
 
-import type { FdcSearchFood, HydratedRecipe } from "../../src/types";
+import IngredientEditModal from "../../src/components/IngredientEditModal";
+import IngredientSearchModal from "../../src/components/IngredientSearchModal";
+
+import type {
+  FdcSearchFood,
+  HydratedRecipe,
+  RecipeIngredientRow,
+} from "../../src/types";
 
 const toNumber = (input: string): number => {
   const n = Number(String(input).replace(",", "."));
@@ -43,27 +43,37 @@ const toNumber = (input: string): number => {
 };
 
 const CreateRecipe = () => {
+  // New recipe draft id (local-first)
   const [recipeId] = useState(() => Crypto.randomUUID());
 
+  // Recipe fields
   const [title, setTitle] = useState<string>("");
   const [servings, setServings] = useState<string>("1");
 
-  const [search, setSearch] = useState<string>("");
-  const [results, setResults] = useState<FdcSearchFood[]>([]);
-  const [grams, setGrams] = useState<string>("100");
-  const [picked, setPicked] = useState<FdcSearchFood | null>(null);
-
+  // Data
   const [recipe, setRecipe] = useState<HydratedRecipe | null>(null);
   const [catalog, setCatalog] = useState<NutrientCatalogRow[]>([]);
   const [visibility, setVisibility] = useState<NutrientVisibilityMap>({});
 
-  const gramsSaveTimers = useRef<Record<string, any>>({});
+  // Modal state
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingIngredient, setEditingIngredient] =
+    useState<RecipeIngredientRow | null>(null);
+
+  // Search modal state
+  const [search, setSearch] = useState<string>("");
+  const [results, setResults] = useState<FdcSearchFood[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  // Note: initDb is already bootstrapped in app/_layout.tsx per your setup
 
   useEffect(() => {
     (async () => {
       setVisibility(await loadVisibility());
       setCatalog(await listNutrientCatalog(""));
-      await refreshRecipe(); // initial
+      await refreshRecipe();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -72,7 +82,6 @@ const CreateRecipe = () => {
     const r = await getRecipeById(recipeId);
     if (r) {
       setRecipe(r);
-      // keep inputs in sync if you later support editing existing recipe
       setTitle(r.title ?? "");
       setServings(String(r.servings ?? 1));
     } else {
@@ -94,64 +103,53 @@ const CreateRecipe = () => {
   const doSearch = async () => {
     const q = search.trim();
     if (q.length < 2) return;
-    const json = await searchFoods(q);
-    setResults(json.foods || []);
+
+    setSearchLoading(true);
+    setSearchError(null);
+
+    try {
+      const json = await searchFoods(q);
+      setResults(json.foods || []);
+    } catch (e: any) {
+      setSearchError(e?.message ?? "Search failed");
+      setResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
   };
 
-  const addPickedIngredient = async () => {
-    if (!picked) return;
-
+  /**
+   * Add ingredient immediately with 100g default, then user can tap to edit grams.
+   * This matches Cronometer/MFP feel: fast add, edit in modal.
+   */
+  const addFoodAsIngredient = async (food: FdcSearchFood, grams = 100) => {
     await saveRecipe();
 
     const ingredientId = Crypto.randomUUID();
+
     await addIngredient({
       id: ingredientId,
       recipe_id: recipeId,
-      fdc_id: picked.fdcId,
-      description: picked.description,
-      grams: Math.max(0, toNumber(grams)),
+      fdc_id: food.fdcId,
+      description: food.description,
+      grams: Math.max(0, grams),
     });
 
-    const details = await getFoodDetailsCached(picked.fdcId);
+    const details = await getFoodDetailsCached(food.fdcId);
     const nutrientsPer100g = await extractNutrientsPer100gAndCatalog(details);
     await upsertIngredientSnapshot(ingredientId, nutrientsPer100g);
 
-    // refresh catalog (new nutrients may have been discovered)
+    // nutrients catalog may expand
     setCatalog(await listNutrientCatalog(""));
 
-    // reset picker
-    setPicked(null);
-    setResults([]);
-    setSearch("");
-
     await refreshRecipe();
-  };
 
-  const onDeleteIngredient = async (ingredientId: string) => {
-    await deleteIngredient(ingredientId);
-    await refreshRecipe();
-  };
-
-  const onChangeIngredientGrams = (ingredientId: string, value: string) => {
-    // Optimistic UI: update local state immediately
-    setRecipe((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        ingredients: prev.ingredients.map((i) =>
-          i.id === ingredientId ? { ...i, grams: toNumber(value) } : i,
-        ),
-      };
-    });
-
-    // Debounced DB write
-    if (gramsSaveTimers.current[ingredientId]) {
-      clearTimeout(gramsSaveTimers.current[ingredientId]);
-    }
-    gramsSaveTimers.current[ingredientId] = setTimeout(async () => {
-      await updateIngredientGrams(ingredientId, Math.max(0, toNumber(value)));
-      await refreshRecipe();
-    }, 350);
+    // open edit modal right away (optional but nice)
+    const updated = await getRecipeById(recipeId);
+    const added =
+      updated?.ingredients?.find((i) => i.id === ingredientId) ?? null;
+    setEditingIngredient(added);
+    setEditModalVisible(true);
   };
 
   const totals = useMemo(() => {
@@ -161,11 +159,12 @@ const CreateRecipe = () => {
 
   const topRows = useMemo(() => {
     if (!totals) return [];
-    // Show top nutrient keys if present in catalog
     const map = new Map(catalog.map((c) => [c.nutrient_key, c]));
+
     return TOP_NUTRIENT_KEYS.map((k) => {
       const meta = map.get(k);
       if (!meta) return null;
+
       return {
         key: k,
         name: meta.name,
@@ -182,30 +181,14 @@ const CreateRecipe = () => {
     }>;
   }, [catalog, totals]);
 
-  const allVisibleRows = useMemo(() => {
-    if (!totals) return [];
-    // Only show nutrients that exist in totals AND are visible
-    return catalog
-      .filter(
-        (n) =>
-          isVisible(visibility, n.nutrient_key) &&
-          totals.totals[n.nutrient_key] != null,
-      )
-      .map((n) => ({
-        key: n.nutrient_key,
-        name: n.name,
-        unit: n.unit,
-        perServing: totals.perServing[n.nutrient_key] ?? 0,
-        total: totals.totals[n.nutrient_key] ?? 0,
-      }));
-  }, [catalog, totals, visibility]);
+  const ingredientCount = recipe?.ingredients?.length ?? 0;
 
   return (
-    <SafeAreaView style={{ paddingHorizontal: 12, gap: 10 }}>
+    <SafeAreaView style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: 12, gap: 16 }}>
-        {/* ---------------- Recipe Info ---------------- */}
+        {/* ---------- Header / Recipe info ---------- */}
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 20, fontWeight: "800" }}>New Recipe</Text>
+          <Text style={{ fontSize: 20, fontWeight: "800" }}>Create Recipe</Text>
 
           <TextInput
             value={title}
@@ -221,140 +204,162 @@ const CreateRecipe = () => {
             placeholder="Servings"
             style={{ borderWidth: 1, borderRadius: 10, padding: 10 }}
           />
+
+          <Pressable
+            onPress={() => void saveRecipe()}
+            style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}
+          >
+            <Text style={{ textAlign: "center", fontWeight: "700" }}>
+              Save Recipe
+            </Text>
+          </Pressable>
         </View>
 
-        {/* ---------------- Nutrition Summary ---------------- */}
+        {/* ---------- Nutrition summary ---------- */}
         {totals && (
-          <View style={{ borderWidth: 1, borderRadius: 12, padding: 12 }}>
-            <Text style={{ fontWeight: "800", marginBottom: 6 }}>
-              Nutrition (per serving)
-            </Text>
+          <View
+            style={{ borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 }}
+          >
+            <Text style={{ fontWeight: "800" }}>Nutrition (per serving)</Text>
+            {topRows.length ? (
+              topRows.map((r) => (
+                <Text key={r.key}>
+                  {r.name}: {r.perServing.toFixed(2)} {r.unit}
+                </Text>
+              ))
+            ) : (
+              <Text style={{ opacity: 0.7 }}>
+                Add ingredients to compute totals.
+              </Text>
+            )}
 
+            <Text style={{ marginTop: 8, fontWeight: "800" }}>
+              Total (whole recipe)
+            </Text>
             {topRows.map((r) => (
-              <Text key={r.key}>
-                {r.name}: {r.perServing.toFixed(2)} {r.unit}
+              <Text key={`${r.key}-t`}>
+                {r.name}: {r.total.toFixed(2)} {r.unit}
               </Text>
             ))}
+
+            {/* Optional hint: more nutrients exist in Recipe Details + Settings */}
+            {catalog.length > 0 && (
+              <Text style={{ marginTop: 8, opacity: 0.6 }}>
+                More nutrients are available and can be hidden/shown in
+                Settings.
+              </Text>
+            )}
           </View>
         )}
 
-        {/* ---------------- Ingredients ---------------- */}
+        {/* ---------- Ingredients section ---------- */}
         <View style={{ gap: 8 }}>
-          <Text style={{ fontWeight: "800", fontSize: 16 }}>Ingredients</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+            }}
+          >
+            <Text style={{ fontWeight: "800", fontSize: 16 }}>Ingredients</Text>
+            <Text style={{ opacity: 0.6 }}>{ingredientCount} items</Text>
+          </View>
 
-          {recipe?.ingredients?.length ? (
-            recipe.ingredients.map((ing) => (
-              <View
+          {ingredientCount ? (
+            recipe!.ingredients.map((ing) => (
+              <Pressable
                 key={ing.id}
+                onPress={() => {
+                  setEditingIngredient(ing);
+                  setEditModalVisible(true);
+                }}
                 style={{
-                  padding: 10,
+                  padding: 12,
                   borderWidth: 1,
                   borderRadius: 12,
                   gap: 6,
                 }}
               >
                 <Text style={{ fontWeight: "700" }}>{ing.description}</Text>
+                <Text style={{ opacity: 0.7 }}>{ing.grams} g</Text>
 
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <TextInput
-                    defaultValue={String(ing.grams)}
-                    keyboardType="decimal-pad"
-                    onChangeText={(v) => onChangeIngredientGrams(ing.id, v)}
-                    style={{
-                      flex: 1,
-                      borderWidth: 1,
-                      borderRadius: 10,
-                      padding: 8,
-                    }}
-                  />
-
-                  <Pressable
-                    onPress={() => void onDeleteIngredient(ing.id)}
-                    style={{ padding: 10, borderWidth: 1, borderRadius: 10 }}
-                  >
-                    <Text>Delete</Text>
-                  </Pressable>
-                </View>
-              </View>
+                {/* Optional: tiny preview using a couple nutrients if available */}
+                {(() => {
+                  // show Energy if present (n_208)
+                  const kcal = ing.nutrientsPer100g?.["n_208"];
+                  if (typeof kcal !== "number") return null;
+                  const totalKcal = (kcal * (Number(ing.grams) || 0)) / 100;
+                  return (
+                    <Text style={{ opacity: 0.7 }}>
+                      ~{totalKcal.toFixed(0)} kcal
+                    </Text>
+                  );
+                })()}
+              </Pressable>
             ))
           ) : (
-            <Text style={{ opacity: 0.6 }}>No ingredients yet</Text>
+            <Text style={{ opacity: 0.6 }}>No ingredients yet.</Text>
           )}
-        </View>
 
-        {/* ---------------- Ingredient Search ---------------- */}
-        <View style={{ gap: 8 }}>
-          <Text style={{ fontWeight: "800", fontSize: 16 }}>
-            Add Ingredient
-          </Text>
-
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search food (chicken breast)"
-              style={{ flex: 1, borderWidth: 1, borderRadius: 10, padding: 10 }}
-            />
-
-            <Pressable
-              onPress={() => void doSearch()}
-              style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}
-            >
-              <Text>Search</Text>
-            </Pressable>
-          </View>
-
-          <FlatList
-            data={results}
-            scrollEnabled={false}
-            keyExtractor={(i) => String(i.fdcId)}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => setPicked(item)}
-                style={{
-                  padding: 10,
-                  borderWidth: 1,
-                  borderRadius: 12,
-                  marginBottom: 8,
-                  backgroundColor:
-                    picked?.fdcId === item.fdcId ? "#e6f4ff" : "#fff",
-                }}
-              >
-                <Text style={{ fontWeight: "700" }}>
-                  {picked?.fdcId === item.fdcId ? "✓ " : ""}
-                  {item.description}
-                </Text>
-
-                <Text style={{ opacity: 0.7 }}>{item.dataType ?? ""}</Text>
-              </Pressable>
-            )}
-          />
-        </View>
-
-        {/* ---------------- Selected Ingredient ---------------- */}
-        {picked && (
-          <View
-            style={{ padding: 12, borderWidth: 1, borderRadius: 12, gap: 8 }}
+          <Pressable
+            onPress={() => setSearchModalVisible(true)}
+            style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}
           >
-            <Text style={{ fontWeight: "800" }}>Selected Ingredient</Text>
-            <Text>{picked.description}</Text>
+            <Text style={{ textAlign: "center", fontWeight: "700" }}>
+              + Add Ingredient
+            </Text>
+          </Pressable>
+        </View>
 
-            <TextInput
-              value={grams}
-              onChangeText={setGrams}
-              keyboardType="decimal-pad"
-              placeholder="Grams"
-              style={{ borderWidth: 1, borderRadius: 10, padding: 10 }}
-            />
+        {/* ---------- Modals ---------- */}
+        <IngredientSearchModal
+          visible={searchModalVisible}
+          results={results}
+          search={search}
+          setSearch={setSearch}
+          onSearch={doSearch}
+          onSelect={(food) => {
+            setSearchModalVisible(false);
+            setResults([]);
+            setSearch("");
 
-            <Pressable
-              onPress={() => void addPickedIngredient()}
-              style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}
-            >
-              <Text style={{ textAlign: "center", fontWeight: "700" }}>
-                Add Ingredient
-              </Text>
-            </Pressable>
+            // Add immediately with default 100g, then open Edit modal
+            void addFoodAsIngredient(food, 100);
+          }}
+          onClose={() => setSearchModalVisible(false)}
+        />
+
+        <IngredientEditModal
+          visible={editModalVisible}
+          ingredient={editingIngredient}
+          onSave={async (g) => {
+            if (!editingIngredient) return;
+            await updateIngredientGrams(editingIngredient.id, Math.max(0, g));
+            setEditModalVisible(false);
+            setEditingIngredient(null);
+            await refreshRecipe();
+          }}
+          onDelete={async () => {
+            if (!editingIngredient) return;
+            await deleteIngredient(editingIngredient.id);
+            setEditModalVisible(false);
+            setEditingIngredient(null);
+            await refreshRecipe();
+          }}
+          onClose={() => {
+            setEditModalVisible(false);
+            setEditingIngredient(null);
+          }}
+        />
+
+        {/* Optional: show search state/errors without cluttering UI */}
+        {(searchLoading || searchError) && (
+          <View style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}>
+            {searchLoading ? (
+              <Text>Searching…</Text>
+            ) : (
+              <Text style={{ opacity: 0.7 }}>{searchError}</Text>
+            )}
           </View>
         )}
       </ScrollView>
