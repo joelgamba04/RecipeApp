@@ -3,18 +3,24 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { FlatList, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import {
   listNutrientCatalog,
   NutrientCatalogRow,
 } from "../../src/db/nutrientsRepo";
+
 import { getRecipeById } from "../../src/db/recipesRepo";
 import { computeRecipeTotals } from "../../src/nutrition/computeTotals";
+
 import type { NutrientVisibilityMap } from "../../src/prefs/nutrientPrefs";
 import { isVisible, loadVisibility } from "../../src/prefs/nutrientPrefs";
+
 import type { HydratedRecipe } from "../../src/types";
 
 export default function RecipeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+
   const [recipe, setRecipe] = useState<HydratedRecipe | null>(null);
   const [visibility, setVisibility] = useState<NutrientVisibilityMap | null>(
     null,
@@ -39,6 +45,7 @@ export default function RecipeDetail() {
   }
 
   const { totals, perServing } = computeRecipeTotals(recipe);
+
   const visibleCatalog = catalog.filter(
     (n) =>
       isVisible(visibility, n.nutrient_key) &&
@@ -46,31 +53,44 @@ export default function RecipeDetail() {
   );
 
   return (
-    <View style={{ padding: 12, gap: 10 }}>
-      <Text style={{ fontSize: 20, fontWeight: "900" }}>{recipe.title}</Text>
-      <Text style={{ opacity: 0.7 }}>Servings: {recipe.servings}</Text>
-
-      <Text style={{ marginTop: 10, fontWeight: "800" }}>Per serving</Text>
-      {visibleCatalog.map((n) => (
-        <Text key={n.nutrient_key}>
-          {n.name}: {Number(perServing[n.nutrient_key] ?? 0).toFixed(2)}{" "}
-          {n.unit}
-        </Text>
-      ))}
-
-      <Text style={{ marginTop: 10, fontWeight: "800" }}>
-        Total (whole recipe)
-      </Text>
-      {visibleCatalog.map((n) => (
-        <Text key={n.nutrient_key}>
-          {n.name}: {Number(totals[n.nutrient_key] ?? 0).toFixed(2)} {n.unit}
-        </Text>
-      ))}
-
-      <Text style={{ marginTop: 10, fontWeight: "800" }}>Ingredients</Text>
+    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <FlatList
         data={recipe.ingredients}
         keyExtractor={(i) => i.id}
+        contentContainerStyle={{ padding: 12, gap: 16 }}
+        ListHeaderComponent={
+          <View style={{ gap: 12 }}>
+            <Text style={{ fontSize: 20, fontWeight: "900" }}>
+              {recipe.title}
+            </Text>
+
+            <Text style={{ opacity: 0.7 }}>Servings: {recipe.servings}</Text>
+
+            <Text style={{ fontWeight: "800" }}>Per serving</Text>
+
+            {visibleCatalog.map((n) => (
+              <Text key={"ps-" + n.nutrient_key}>
+                {n.name}: {Number(perServing[n.nutrient_key] ?? 0).toFixed(2)}{" "}
+                {n.unit}
+              </Text>
+            ))}
+
+            <Text style={{ marginTop: 10, fontWeight: "800" }}>
+              Total (whole recipe)
+            </Text>
+
+            {visibleCatalog.map((n) => (
+              <Text key={"t-" + n.nutrient_key}>
+                {n.name}: {Number(totals[n.nutrient_key] ?? 0).toFixed(2)}{" "}
+                {n.unit}
+              </Text>
+            ))}
+
+            <Text style={{ marginTop: 10, fontWeight: "800" }}>
+              Ingredients
+            </Text>
+          </View>
+        }
         renderItem={({ item }) => (
           <View
             style={{
@@ -85,6 +105,6 @@ export default function RecipeDetail() {
           </View>
         )}
       />
-    </View>
+    </SafeAreaView>
   );
 }
