@@ -1,3 +1,4 @@
+// src/components/IngredientSearchModal.tsx
 import {
   FlatList,
   Modal,
@@ -6,7 +7,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { FdcSearchFood } from "../types";
 
 type Props = {
@@ -14,9 +18,21 @@ type Props = {
   results: FdcSearchFood[];
   search: string;
   setSearch: (v: string) => void;
-  onSearch: () => void | Promise<void>;
+  loading: boolean;
+  error: string | null;
   onSelect: (food: FdcSearchFood) => void;
   onClose: () => void;
+};
+
+const getResultSubtitle = (item: FdcSearchFood) => {
+  const bits: string[] = [];
+
+  if (item.dataType) bits.push(item.dataType);
+
+  const maybeBrandOwner = (item as any).brandOwner;
+  if (maybeBrandOwner) bits.push(maybeBrandOwner);
+
+  return bits.join(" • ");
 };
 
 const IngredientSearchModal = ({
@@ -24,65 +40,116 @@ const IngredientSearchModal = ({
   results,
   search,
   setSearch,
-  onSearch,
+  loading,
+  error,
   onSelect,
   onClose,
 }: Props) => {
   if (!visible) return null;
+  const insets = useSafeAreaInsets();
+
+  const showStartHint = search.trim().length < 2;
+  const showEmpty =
+    !loading && !error && search.trim().length >= 2 && results.length === 0;
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, padding: 16, gap: 10 }}>
-        <Text style={{ fontSize: 18, fontWeight: "800" }}>Add Ingredient</Text>
+      <SafeAreaView
+        style={{ flex: 1, padding: 16, gap: 12, paddingBottom: insets.bottom }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: "800" }}>
+            Add Ingredient
+          </Text>
 
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search food (e.g., chicken breast)"
-            style={{ flex: 1, borderWidth: 1, borderRadius: 10, padding: 10 }}
-          />
           <Pressable
-            onPress={() => void onSearch()}
-            style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}
+            onPress={onClose}
+            style={{ paddingHorizontal: 10, paddingVertical: 8 }}
           >
-            <Text>Search</Text>
+            <Text style={{ fontWeight: "600" }}>Close</Text>
           </Pressable>
         </View>
+
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search food (e.g., chicken breast)"
+          autoFocus
+          style={{
+            borderWidth: 1,
+            borderRadius: 12,
+            padding: 12,
+          }}
+        />
+
+        {showStartHint ? (
+          <Text style={{ opacity: 0.65 }}>
+            Type at least 2 characters to search.
+          </Text>
+        ) : null}
+
+        {loading ? <Text>Searching…</Text> : null}
+
+        {error ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 12,
+            }}
+          >
+            <Text style={{ opacity: 0.75 }}>{error}</Text>
+          </View>
+        ) : null}
+
+        {showEmpty ? (
+          <Text style={{ opacity: 0.65 }}>No matching ingredients found.</Text>
+        ) : null}
 
         <FlatList
           data={results}
           keyExtractor={(i) => String(i.fdcId)}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => onSelect(item)}
-              style={{
-                padding: 12,
-                borderWidth: 1,
-                borderRadius: 12,
-                marginBottom: 8,
-              }}
-            >
-              <Text style={{ fontWeight: "700" }}>{item.description}</Text>
-              {item.brandName && (
-                <Text style={{ opacity: 0.7 }}>{item.brandName ?? ""}</Text>
-              )}
-              {item.ingridients && (
-                <Text style={{ opacity: 0.7 }}>{item.ingridients ?? ""}</Text>
-              )}
-              {item.foodCategory && (
-                <Text style={{ opacity: 0.7 }}>{item.foodCategory ?? ""}</Text>
-              )}
-            </Pressable>
-          )}
-        />
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 16 }}
+          renderItem={({ item }) => {
+            const subtitle = getResultSubtitle(item);
+            const servingSize = (item as any).servingSize;
+            const servingUnit = (item as any).servingSizeUnit;
 
-        <Pressable
-          onPress={onClose}
-          style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}
-        >
-          <Text style={{ textAlign: "center" }}>Close</Text>
-        </Pressable>
+            return (
+              <Pressable
+                onPress={() => onSelect(item)}
+                style={{
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  padding: 12,
+                  marginBottom: 10,
+                  gap: 4,
+                }}
+              >
+                <Text style={{ fontWeight: "700", fontSize: 15 }}>
+                  {item.description}
+                </Text>
+
+                {subtitle ? (
+                  <Text style={{ opacity: 0.65 }}>{subtitle}</Text>
+                ) : null}
+
+                {servingSize ? (
+                  <Text style={{ opacity: 0.65 }}>
+                    Serving size: {servingSize} {servingUnit ?? ""}
+                  </Text>
+                ) : null}
+              </Pressable>
+            );
+          }}
+        />
       </SafeAreaView>
     </Modal>
   );

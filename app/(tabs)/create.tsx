@@ -75,8 +75,39 @@ const CreateRecipe = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!searchModalVisible) return;
+
+    const q = search.trim();
+
+    if (q.length < 2) {
+      setResults([]);
+      setSearchError(null);
+      setSearchLoading(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        setSearchError(null);
+
+        const json = await searchFoods(q);
+        setResults(json.foods || []);
+      } catch (e: any) {
+        setSearchError(e?.message ?? "Search failed");
+        setResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [search, searchModalVisible]);
+
   const refreshRecipe = async () => {
     const r = await getRecipeById(recipeId);
+
     if (r) {
       setRecipe(r);
       setTitle(r.title ?? "");
@@ -85,10 +116,6 @@ const CreateRecipe = () => {
     } else {
       setRecipe(null);
     }
-  };
-
-  const saveRecipe = async () => {
-    persistRecipe();
   };
 
   const persistRecipe = async (next?: {
@@ -107,22 +134,8 @@ const CreateRecipe = () => {
     await refreshRecipe();
   };
 
-  const doSearch = async () => {
-    const q = search.trim();
-    if (q.length < 2) return;
-
-    setSearchLoading(true);
-    setSearchError(null);
-
-    try {
-      const json = await searchFoods(q);
-      setResults(json.foods || []);
-    } catch (e: any) {
-      setSearchError(e?.message ?? "Search failed");
-      setResults([]);
-    } finally {
-      setSearchLoading(false);
-    }
+  const saveRecipe = async () => {
+    await persistRecipe();
   };
 
   /**
@@ -297,8 +310,9 @@ const CreateRecipe = () => {
               alignItems: "baseline",
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 16 }}>Ingredients</Text>
-            <Text style={{ opacity: 0.6 }}>{ingredientCount} items</Text>
+            <Text style={{ fontWeight: "800", fontSize: 16 }}>
+              Ingredients ({ingredientCount})
+            </Text>
           </View>
 
           {ingredientCount ? (
@@ -338,7 +352,13 @@ const CreateRecipe = () => {
           )}
 
           <Pressable
-            onPress={() => setSearchModalVisible(true)}
+            onPress={() => {
+              setSearch("");
+              setResults([]);
+              setSearchError(null);
+              setSearchLoading(false);
+              setSearchModalVisible(true);
+            }}
             style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}
           >
             <Text style={{ textAlign: "center", fontWeight: "700" }}>
@@ -366,7 +386,9 @@ const CreateRecipe = () => {
               <TextInput
                 value={step}
                 multiline
-                onChangeText={(v) => void updateStep(index, v)}
+                onChangeText={(v) => {
+                  void updateStep(index, v);
+                }}
                 style={{
                   borderWidth: 1,
                   borderRadius: 10,
@@ -376,7 +398,9 @@ const CreateRecipe = () => {
               />
 
               <Pressable
-                onPress={() => void deleteStep(index)}
+                onPress={() => {
+                  void deleteStep(index);
+                }}
                 style={{
                   padding: 8,
                   borderWidth: 1,
@@ -422,7 +446,8 @@ const CreateRecipe = () => {
           results={results}
           search={search}
           setSearch={setSearch}
-          onSearch={doSearch}
+          loading={searchLoading}
+          error={searchError}
           onSelect={(food) => {
             setSearchModalVisible(false);
             setResults([]);
@@ -456,17 +481,6 @@ const CreateRecipe = () => {
             setEditingIngredient(null);
           }}
         />
-
-        {/* Optional: show search state/errors without cluttering UI */}
-        {(searchLoading || searchError) && (
-          <View style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}>
-            {searchLoading ? (
-              <Text>Searching…</Text>
-            ) : (
-              <Text style={{ opacity: 0.7 }}>{searchError}</Text>
-            )}
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
