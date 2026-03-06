@@ -37,11 +37,6 @@ import type {
   RecipeIngredientRow,
 } from "../../src/types";
 
-const toNumber = (input: string): number => {
-  const n = Number(String(input).replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-};
-
 const CreateRecipe = () => {
   // New recipe draft id (local-first)
   const [recipeId] = useState(() => Crypto.randomUUID());
@@ -67,7 +62,9 @@ const CreateRecipe = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Note: initDb is already bootstrapped in app/_layout.tsx per your setup
+  // Step management
+  const [steps, setSteps] = useState<string[]>([]);
+  const [newStep, setNewStep] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -84,19 +81,29 @@ const CreateRecipe = () => {
       setRecipe(r);
       setTitle(r.title ?? "");
       setServings(String(r.servings ?? 1));
+      setSteps(r.steps ?? []);
     } else {
       setRecipe(null);
     }
   };
 
   const saveRecipe = async () => {
+    persistRecipe();
+  };
+
+  const persistRecipe = async (next?: {
+    title?: string;
+    servings?: string;
+    steps?: string[];
+  }) => {
     await upsertRecipe({
       id: recipeId,
-      title: title.trim() || "Untitled recipe",
-      servings: Math.max(1, Number(servings) || 1),
-      steps: recipe?.steps ?? [],
+      title: (next?.title ?? title).trim() || "Untitled recipe",
+      servings: Math.max(1, Number(next?.servings ?? servings) || 1),
+      steps: next?.steps ?? steps,
       photo_uri: null,
     });
+
     await refreshRecipe();
   };
 
@@ -182,6 +189,32 @@ const CreateRecipe = () => {
   }, [catalog, totals]);
 
   const ingredientCount = recipe?.ingredients?.length ?? 0;
+
+  const addStep = async () => {
+    const text = newStep.trim();
+    if (!text) return;
+
+    const nextSteps = [...steps, text];
+    setSteps(nextSteps);
+    setNewStep("");
+
+    await persistRecipe({ steps: nextSteps });
+  };
+
+  const updateStep = async (index: number, value: string) => {
+    const nextSteps = [...steps];
+    nextSteps[index] = value;
+    setSteps(nextSteps);
+
+    await persistRecipe({ steps: nextSteps });
+  };
+
+  const deleteStep = async (index: number) => {
+    const nextSteps = steps.filter((_, i) => i !== index);
+    setSteps(nextSteps);
+
+    await persistRecipe({ steps: nextSteps });
+  };
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
@@ -310,6 +343,75 @@ const CreateRecipe = () => {
           >
             <Text style={{ textAlign: "center", fontWeight: "700" }}>
               + Add Ingredient
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* ---------------- Cooking Steps ---------------- */}
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontWeight: "800", fontSize: 16 }}>Cooking Steps</Text>
+
+          {steps.map((step, index) => (
+            <View
+              key={index}
+              style={{
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 10,
+                gap: 6,
+              }}
+            >
+              <Text style={{ fontWeight: "700" }}>Step {index + 1}</Text>
+
+              <TextInput
+                value={step}
+                multiline
+                onChangeText={(v) => void updateStep(index, v)}
+                style={{
+                  borderWidth: 1,
+                  borderRadius: 10,
+                  padding: 8,
+                  minHeight: 50,
+                }}
+              />
+
+              <Pressable
+                onPress={() => void deleteStep(index)}
+                style={{
+                  padding: 8,
+                  borderWidth: 1,
+                  borderRadius: 8,
+                  alignSelf: "flex-start",
+                }}
+              >
+                <Text>Delete</Text>
+              </Pressable>
+            </View>
+          ))}
+
+          <TextInput
+            value={newStep}
+            onChangeText={setNewStep}
+            placeholder="Add new step..."
+            multiline
+            style={{
+              borderWidth: 1,
+              borderRadius: 10,
+              padding: 10,
+              minHeight: 60,
+            }}
+          />
+
+          <Pressable
+            onPress={() => void addStep()}
+            style={{
+              padding: 12,
+              borderWidth: 1,
+              borderRadius: 12,
+            }}
+          >
+            <Text style={{ textAlign: "center", fontWeight: "700" }}>
+              + Add Step
             </Text>
           </Pressable>
         </View>

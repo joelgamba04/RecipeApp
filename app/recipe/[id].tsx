@@ -3,7 +3,10 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { FlatList, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import {
   listNutrientCatalog,
@@ -18,8 +21,9 @@ import { isVisible, loadVisibility } from "../../src/prefs/nutrientPrefs";
 
 import type { HydratedRecipe } from "../../src/types";
 
-export default function RecipeDetail() {
+const RecipeDetail = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
 
   const [recipe, setRecipe] = useState<HydratedRecipe | null>(null);
   const [visibility, setVisibility] = useState<NutrientVisibilityMap | null>(
@@ -53,48 +57,61 @@ export default function RecipeDetail() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, paddingBottom: insets.bottom }}
+      edges={["bottom"]}
+    >
       <FlatList
         data={recipe.ingredients}
         keyExtractor={(i) => i.id}
         contentContainerStyle={{ padding: 12, gap: 16 }}
         ListHeaderComponent={
           <View style={{ gap: 12 }}>
-            <Text style={{ fontSize: 20, fontWeight: "900" }}>
+            <Text style={{ fontSize: 22, fontWeight: "900" }}>
               {recipe.title}
             </Text>
 
             <Text style={{ opacity: 0.7 }}>Servings: {recipe.servings}</Text>
 
-            <Text style={{ fontWeight: "800" }}>Per serving</Text>
-
-            {visibleCatalog.map((n) => (
-              <Text key={"ps-" + n.nutrient_key}>
-                {n.name}: {Number(perServing[n.nutrient_key] ?? 0).toFixed(2)}{" "}
-                {n.unit}
+            {/* Nutrition */}
+            <View
+              style={{
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 12,
+                gap: 4,
+              }}
+            >
+              <Text style={{ fontWeight: "800", marginBottom: 6 }}>
+                Nutrition (per serving)
               </Text>
-            ))}
 
-            <Text style={{ marginTop: 10, fontWeight: "800" }}>
-              Total (whole recipe)
-            </Text>
+              {visibleCatalog.map((n) => (
+                <Text key={"ps-" + n.nutrient_key}>
+                  {n.name}: {Number(perServing[n.nutrient_key] ?? 0).toFixed(2)}{" "}
+                  {n.unit}
+                </Text>
+              ))}
 
-            {visibleCatalog.map((n) => (
-              <Text key={"t-" + n.nutrient_key}>
-                {n.name}: {Number(totals[n.nutrient_key] ?? 0).toFixed(2)}{" "}
-                {n.unit}
+              <Text style={{ marginTop: 10, fontWeight: "800" }}>
+                Total (whole recipe)
               </Text>
-            ))}
 
-            <Text style={{ marginTop: 10, fontWeight: "800" }}>
-              Ingredients
-            </Text>
+              {visibleCatalog.map((n) => (
+                <Text key={"t-" + n.nutrient_key}>
+                  {n.name}: {Number(totals[n.nutrient_key] ?? 0).toFixed(2)}{" "}
+                  {n.unit}
+                </Text>
+              ))}
+            </View>
+
+            <Text style={{ fontWeight: "800", fontSize: 16 }}>Ingredients</Text>
           </View>
         }
         renderItem={({ item }) => (
           <View
             style={{
-              padding: 10,
+              padding: 12,
               borderWidth: 1,
               borderRadius: 12,
               marginBottom: 8,
@@ -104,7 +121,35 @@ export default function RecipeDetail() {
             <Text style={{ opacity: 0.7 }}>{item.grams} g</Text>
           </View>
         )}
+        ListFooterComponent={
+          <View style={{ marginTop: 10 }}>
+            <Text style={{ fontWeight: "800", fontSize: 16 }}>
+              Cooking Steps
+            </Text>
+
+            {recipe.steps.length === 0 ? (
+              <Text style={{ opacity: 0.6 }}>No steps yet</Text>
+            ) : (
+              recipe.steps.map((step, index) => (
+                <View
+                  key={index}
+                  style={{
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    padding: 12,
+                    marginTop: 8,
+                  }}
+                >
+                  <Text style={{ fontWeight: "800" }}>Step {index + 1}</Text>
+                  <Text>{step}</Text>
+                </View>
+              ))
+            )}
+          </View>
+        }
       />
     </SafeAreaView>
   );
-}
+};
+
+export default RecipeDetail;
